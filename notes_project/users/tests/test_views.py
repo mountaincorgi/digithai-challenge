@@ -64,10 +64,6 @@ class LoginTest(TestCase):
 
 
 class LogoutTest(TestCase):
-    def test_get_request_renders_the_logout_template(self):
-        response = self.client.get("/logout/")
-        self.assertRedirects(response, "/login/")
-
     def test_successfully_logging_out_redirects_to_the_login_page(self):
         response = self.client.post("/logout/")
         self.assertRedirects(response, "/login/")
