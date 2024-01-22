@@ -1,11 +1,8 @@
-from django.test import Client, TestCase
+from django.test import TestCase
 from users.factories import UserFactory
 
 
 class SignUpTest(TestCase):
-    def setUp(self):
-        self.client = Client()
-
     def test_get_request_renders_the_sign_up_template(self):
         response = self.client.get("/sign-up/")
         self.assertTemplateUsed(response, "users/sign-up.html")
@@ -36,7 +33,9 @@ class SignUpTest(TestCase):
 class LoginTest(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.user = UserFactory(username="testuser", password="abcd1234*")
+        cls.user = UserFactory(
+            username="testuser", custom_password="abcd1234*"
+        )
 
     def test_get_request_renders_the_login_template(self):
         response = self.client.get("/login/")

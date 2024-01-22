@@ -9,7 +9,7 @@ class UserFactory(factory.django.DjangoModelFactory):
     username = factory.Sequence(lambda n: f"User {n}")
 
     @factory.post_generation
-    def password(obj, create, extracted, **kwargs):
+    def custom_password(obj, create, extracted, **kwargs):
         if extracted:
             obj.set_password(extracted)
             if create:
