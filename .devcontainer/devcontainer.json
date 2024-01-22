@@ -16,9 +16,6 @@
 	"forwardPorts": [8000],
 
 	// Uncomment the next line to run commands after the container is created.
-	// Install
-	// * git
-	// * pre-commit
 	"postCreateCommand": "apt-get update && apt-get install -y git && git config --global --add safe.directory /workspaces/* && python -m pip install pre-commit==3.6.0 && pre-commit install",
 
 	// Configure tool-specific properties.
