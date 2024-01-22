@@ -89,4 +89,4 @@ class NoteUpdateView(BelongsToUserMixin, UpdateView):
 class NoteDeleteView(BelongsToUserMixin, DeleteView):
     model = Note
     context_object_name = "note"
-    success_url = "/notes/"
+    success_url = "/"

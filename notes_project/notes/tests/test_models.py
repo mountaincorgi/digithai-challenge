@@ -44,4 +44,4 @@ class NoteTest(TestCase):
         self.assertEqual(note.content, "Less than 180 characters!")
 
     def test_get_absolute_url(self):
-        self.assertEqual(self.note.get_absolute_url(), "/notes/1/")
+        self.assertEqual(self.note.get_absolute_url(), f"/{self.note.pk}/")

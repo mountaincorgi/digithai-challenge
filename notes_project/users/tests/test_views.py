@@ -49,7 +49,7 @@ class LoginTest(TestCase):
                 "password": "abcd1234*",
             },
         )
-        self.assertRedirects(response, "/notes/")
+        self.assertRedirects(response, "/")
 
     def test_failure_when_submitting_the_form_reloads_the_same_page(self):
         response = self.client.post(
