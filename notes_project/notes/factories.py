@@ -1,11 +1,13 @@
 import factory
 from notes.models import Note
+from users.factories import UserFactory
 
 
 class NoteFactory(factory.django.DjangoModelFactory):
     class Meta:
         model = Note
 
+    user = factory.SubFactory(UserFactory)
     title = factory.Sequence(lambda n: f"Note {n}")
     content = factory.Faker("paragraph", nb_sentences=5)
 

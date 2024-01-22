@@ -43,132 +43,123 @@ class NoteListTest(TestCase):
             user=self.user_1, custom_created=datetime(2024, 1, 1, tzinfo=UTC)
         )
         note_2 = NoteFactory(
-            user=self.user_1, custom_created=datetime(2024, 1, 2, tzinfo=UTC)
-        )
-        note_3 = NoteFactory(
-            user=self.user_2, custom_created=datetime(2024, 1, 3, tzinfo=UTC)
+            user=self.user_2, custom_created=datetime(2024, 1, 1, tzinfo=UTC)
         )
 
         request = self.factory.get("/notes/")
         request.user = self.user_1
         response = NoteListView.as_view()(request)
         notes = response.context_data["notes"]
-        self.assertListEqual(list(notes), [note_2, note_1])
+        self.assertListEqual(list(notes), [note_1])
 
     def test_unauthenticated_user_is_redirected_to_the_login_page(self):
         response = self.client.get("/notes/")
         self.assertRedirects(response, "/login/?next=/notes/")
 
+    def test_searching_works(self):
+        self.client.force_login(self.user_1)
+        note_1 = NoteFactory(
+            user=self.user_1,
+            title="one",
+            custom_created=datetime(2024, 1, 1, tzinfo=UTC),
+        )
+        note_2 = NoteFactory(
+            user=self.user_1,
+            title="two",
+            custom_created=datetime(2024, 1, 2, tzinfo=UTC),
+        )
 
-# class NoteListSearchTest(TestCase):
-#     @classmethod
-#     def setUpTestData(cls):
-#         cls.user = UserFactory()
+        response = self.client.get("/notes/?q=one")
+        notes = response.context["notes"]
+        self.assertListEqual(list(notes), [note_1])
 
-#         cls.note_1 = NoteFactory(
-#             title="Diary Entry",
-#             content="content",
-#             custom_created="2024-01-01 00:00:00",
-#         )
-#         cls.note_2 = NoteFactory(
-#             title="shopping list!!",
-#             content="content",
-#             custom_created="2024-01-02 00:00:00",
-#         )
-#         cls.note_3 = NoteFactory(
-#             title="New Year 2023",
-#             content="content",
-#             custom_created="2024-01-03 00:00:00",
-#         )
-#         cls.note_4 = NoteFactory(
-#             title="my BUCKET LIST",
-#             content="content",
-#             custom_created="2024-01-04 00:00:00",
-#         )
-#         cls.note_5 = NoteFactory(
-#             title="restaurants list",
-#             content="content",
-#             custom_created="2000-01-05 00:00:00",
-#         )
+    def test_searching_with_an_invalid_querystring_returns_all_notes(self):
+        self.client.force_login(self.user_1)
+        note_1 = NoteFactory(
+            user=self.user_1,
+            title="one",
+            custom_created=datetime(2024, 1, 1, tzinfo=UTC),
+        )
+        note_2 = NoteFactory(
+            user=self.user_1,
+            title="two",
+            custom_created=datetime(2024, 1, 2, tzinfo=UTC),
+        )
 
-#     def setUp(self):
-#         self.client.force_login(self.user)
+        response = self.client.get("/notes/?qqq=one")
+        notes = response.context["notes"]
+        self.assertListEqual(list(notes), [note_2, note_1])
 
-#     def test_searching_by_exact_word_filters_notes_successfully(self):
-#         response = self.client.get("/notes/?search=Diary")
-#         notes = response.context["notes"]
-#         self.assertListEqual(list(notes), [self.note_1])
 
-#     def test_searching_by_a_substring_filters_notes_successfully(self):
-#         response = self.client.get("/notes/?search=shop")
-#         notes = response.context["notes"]
-#         self.assertListEqual(list(notes), [self.note_2])
+class GetSearchQObjectTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = UserFactory()
+        cls.view = NoteListView()
 
-#     def test_searching_by_more_than_1_word_includes_results_with_either(self):
-#         pass
+        cls.note_1 = NoteFactory(title="Diary Entry", content="content")
+        cls.note_2 = NoteFactory(title="shopping list!!", content="content")
+        cls.note_3 = NoteFactory(title="New Year 2023", content="content")
+        cls.note_4 = NoteFactory(title="my BUCKET LIST", content="content")
+        cls.note_5 = NoteFactory(title="restaurants list", content="content")
 
-#     def test_searching_is_not_case_sensitive(self):
-#         response = self.client.get("/notes/?search=DIAR")
-#         notes = response.context["notes"]
-#         self.assertListEqual(list(notes), [self.note_1])
+    def test_searching_by_exact_word_filters_notes_successfully(self):
+        q_obj = self.view.get_search_q_object("Diary")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertListEqual(list(notes), [self.note_1])
 
-#     def test_searching_works_with_numbers(self):
-#         response = self.client.get("/notes/?search=2023")
-#         notes = response.context["notes"]
-#         self.assertListEqual(list(notes), [self.note_3])
+    def test_searching_by_a_substring_filters_notes_successfully(self):
+        q_obj = self.view.get_search_q_object("shop")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertListEqual(list(notes), [self.note_2])
 
-#     def test_searching_works_with_special_characters(self):
-#         response = self.client.get("/notes/?search=%2B")
-#         notes = response.context["notes"]
-#         self.assertListEqual(list(notes), [self.note_2])
+    def test_searching_by_more_than_1_word_includes_results_with_either(self):
+        q_obj = self.view.get_search_q_object("diary shop")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertListEqual(list(notes), [self.note_1, self.note_2])
 
-#     def test_searching_strips_whitespace_from_the_search_term(self):
-#         response = self.client.get("/notes/?search=%2B")
-#         notes = response.context["notes"]
-#         self.assertListEqual(list(notes), [self.note_2])
+    def test_whitespace_is_stripped(self):
+        q_obj = self.view.get_search_q_object("Diary         shop   ")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertListEqual(list(notes), [self.note_1, self.note_2])
 
-#     def searching_returns_notes_ordered_from_newest_to_oldest(self):
-#         response = self.client.get("/notes/?search=list")
-#         notes = response.context["notes"]
-#         self.assertListEqual(
-#             list(notes), [self.note_4, self.note_2, self.note_5]
-#         )
+    def test_searching_is_not_case_sensitive(self):
+        q_obj = self.view.get_search_q_object("DIAR")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertListEqual(list(notes), [self.note_1])
 
-#     def test_searching_with_a_blank_string_returns_all_notes(self):
-#         response = self.client.get("/notes/?saarchh=")
-#         notes = response.context["notes"]
-#         self.assertListEqual(
-#             list(notes),
-#             [self.note_4, self.note_3, self.note_2, self.note_1, self.note_5],
-#         )
+    def test_searching_works_with_numbers(self):
+        q_obj = self.view.get_search_q_object("2023")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertListEqual(list(notes), [self.note_3])
 
-#     def test_searching_with_an_invalid_querystring_returns_all_notes(self):
-#         response = self.client.get("/notes/?saarchh=random")
-#         notes = response.context["notes"]
-#         self.assertListEqual(
-#             list(notes),
-#             [self.note_4, self.note_3, self.note_2, self.note_1, self.note_5],
-#         )
+    def test_searching_works_with_special_characters(self):
+        q_obj = self.view.get_search_q_object("!!")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertListEqual(list(notes), [self.note_2])
 
-#     def test_manually_typed_spaces_are_removed_from_search_term(self):
-#         response = self.client.get("/notes/?search=dia   ry")
-#         notes = response.context["notes"]
-#         self.assertListEqual(list(notes), [self.note_1])
+    def test_searching_with_a_blank_string_returns_all_notes(self):
+        q_obj = self.view.get_search_q_object("")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertListEqual(
+            list(notes),
+            [self.note_1, self.note_2, self.note_3, self.note_4, self.note_5],
+        )
 
-#     def test_searching_returns_no_matches(self):
-#         response = self.client.get("/notes/?search=random")
-#         notes = response.context["notes"]
-#         self.assertFalse(notes.exists())
+    def test_searching_returns_no_matches(self):
+        q_obj = self.view.get_search_q_object("random")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertFalse(notes.exists())
 
-#     def test_searching_by_pk_does_not_work(self):
-#         response = self.client.get(f"/notes/?search={self.note_1.pk}")
-#         notes = response.context["notes"]
-#         self.assertFalse(notes.exists())
+    def test_searching_by_pk_does_not_work(self):
+        q_obj = self.view.get_search_q_object(f"{self.note_1.pk}")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertFalse(notes.exists())
 
-#     def test_searching_by_content_does_not_work(self):
-#         response = self.client.get("/notes/?search=content")
-#         notes = response.context["notes"]
-#         self.assertFalse(notes.exists())
+    def test_searching_by_content_does_not_work(self):
+        q_obj = self.view.get_search_q_object("content")
+        notes = Note.objects.filter(q_obj).order_by("id")
+        self.assertFalse(notes.exists())
 
 
 class NoteCreateTest(TestCase):

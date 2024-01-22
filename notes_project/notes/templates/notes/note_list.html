@@ -1,5 +1,12 @@
 <div>
     <h1>Note List</h1>
+    <div>
+        <h3>Search</h3>
+        <form method="GET">
+            {{ form }}
+            <button type="submit">Search</button>
+        </form>
+    </div>
     {% for note in notes %}
         <h3>{{ note.title }}</h3>
     {% endfor %}
