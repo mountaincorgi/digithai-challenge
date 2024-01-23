@@ -30,7 +30,7 @@ class NoteTest(TestCase):
         max_length = self.note._meta.get_field("title").max_length
         assert max_length == 140
 
-    def test_content_preview_cuts_off_at_180_characters(self):
+    def test_preview_content_cuts_off_at_180_characters(self):
         note = NoteFactory(
             content="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum maximus dictum massa, sit amet vehicula purus laoreet nec. Nam iaculis dignissim eros, et elementum ex imperdiet id."
         )
@@ -39,7 +39,7 @@ class NoteTest(TestCase):
             == "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum maximus dictum massa, sit amet vehicula purus laoreet nec. Nam iaculis dignissim eros, et elementum ex imperd..."
         )
 
-    def test_content_preview_under_180_characters_stays_the_same(self):
+    def test_preview_content_under_180_characters_stays_the_same(self):
         note = NoteFactory(content="Less than 180 characters!")
         assert note.content == "Less than 180 characters!"
 
