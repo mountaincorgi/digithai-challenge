@@ -1,13 +1,31 @@
+{% extends "notes/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block content %}
 <div>
-    <h1>Note List</h1>
+    {% if request.user.is_authenticated %}
+        <h2>{{ user.username }}'s notes</h2>
+    {% else %}
+        <h2>Notes</h2>
+    {% endif %}
+
+    <a href="{% url 'note-create' %}" class="btn btn-lg btn-success mb-3 mt-3">Add a new note</a>
+
     <div>
-        <h3>Search</h3>
         <form method="GET">
-            {{ form }}
-            <button type="submit">Search</button>
+            {{ form|crispy }}
+            <button type="submit" class="btn btn-primary">Search</button>
         </form>
     </div>
+
+    <br>
+
     {% for note in notes %}
-        <h3>{{ note.title }}</h3>
+    <div class="row mt-2">
+        <h5><a href="{% url 'note-detail' note.pk %}">{{ note.title }}</a></h5>
+        <p>{{ note.preview_content }}</p>
+        <p class="text-secondary"><i><span>Created on {{ note.created }}</span> | <span>Modified: {{ note.modified }}</span></i></p>
+    </div>
     {% endfor %}
 </div>
+{% endblock %}
