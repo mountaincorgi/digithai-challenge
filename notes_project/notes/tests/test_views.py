@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from django.test import RequestFactory, TestCase
+from django.test import Client, TestCase
 from notes.factories import NoteFactory
 from notes.models import Note
 from notes.views import NoteListView
@@ -14,14 +14,13 @@ class NoteListTest(TestCase):
         cls.user_1, cls.user_2 = UserFactory.create_batch(2)
 
     def setUp(self):
-        self.factory = RequestFactory()
+        self.client.force_login(self.user_1)
 
     def test_get_request_renders_the_note_list_template(self):
-        self.client.force_login(self.user_1)
         response = self.client.get("/")
         self.assertTemplateUsed(response, "notes/note_list.html")
 
-    def test_notes_ordered_from_newest_to_oldest(self):
+    def test_notes_are_ordered_from_newest_to_oldest(self):
         note_1 = NoteFactory(
             user=self.user_1, custom_created=datetime(2024, 1, 2, tzinfo=UTC)
         )
@@ -31,64 +30,40 @@ class NoteListTest(TestCase):
         note_3 = NoteFactory(
             user=self.user_1, custom_created=datetime(2024, 1, 3, tzinfo=UTC)
         )
+        response = self.client.get("/")
+        notes = response.context["notes"]
+        assert list(notes) == [note_3, note_1, note_2]
 
-        request = self.factory.get("/notes/")
-        request.user = self.user_1
-        response = NoteListView.as_view()(request)
-        notes = response.context_data["notes"]
-        self.assertListEqual(list(notes), [note_3, note_1, note_2])
-
-    def test_user_cannot_see_other_users_notes(self):
+    def test_user_cannot_see_notes_belonging_to_other_users(self):
         note_1 = NoteFactory(
             user=self.user_1, custom_created=datetime(2024, 1, 1, tzinfo=UTC)
         )
         note_2 = NoteFactory(
             user=self.user_2, custom_created=datetime(2024, 1, 1, tzinfo=UTC)
         )
-
-        request = self.factory.get("/notes/")
-        request.user = self.user_1
-        response = NoteListView.as_view()(request)
-        notes = response.context_data["notes"]
-        self.assertListEqual(list(notes), [note_1])
+        response = self.client.get("/")
+        notes = response.context["notes"]
+        assert list(notes) == [note_1]
 
     def test_unauthenticated_user_is_redirected_to_the_login_page(self):
-        response = self.client.get("/")
+        response = Client().get("/")
         self.assertRedirects(response, "/login/?next=/")
 
-    def test_searching_works(self):
-        self.client.force_login(self.user_1)
-        note_1 = NoteFactory(
-            user=self.user_1,
-            title="one",
-            custom_created=datetime(2024, 1, 1, tzinfo=UTC),
-        )
-        note_2 = NoteFactory(
-            user=self.user_1,
-            title="two",
-            custom_created=datetime(2024, 1, 2, tzinfo=UTC),
-        )
+    def test_searching_notes_using_a_querystring_is_possible(self):
+        note_1 = NoteFactory(user=self.user_1, title="one")
+        note_2 = NoteFactory(user=self.user_1, title="two")
 
         response = self.client.get("/?q=one")
         notes = response.context["notes"]
-        self.assertListEqual(list(notes), [note_1])
+        assert list(notes) == [note_1]
 
     def test_searching_with_an_invalid_querystring_returns_all_notes(self):
-        self.client.force_login(self.user_1)
-        note_1 = NoteFactory(
-            user=self.user_1,
-            title="one",
-            custom_created=datetime(2024, 1, 1, tzinfo=UTC),
-        )
-        note_2 = NoteFactory(
-            user=self.user_1,
-            title="two",
-            custom_created=datetime(2024, 1, 2, tzinfo=UTC),
-        )
+        note_1 = NoteFactory(user=self.user_1, title="one")
+        note_2 = NoteFactory(user=self.user_1, title="two")
 
         response = self.client.get("/?qqq=one")
         notes = response.context["notes"]
-        self.assertListEqual(list(notes), [note_2, note_1])
+        self.assertCountEqual(notes, [note_1, note_2])
 
 
 class GetSearchQObjectTest(TestCase):
@@ -101,65 +76,68 @@ class GetSearchQObjectTest(TestCase):
         cls.note_2 = NoteFactory(title="shopping list!!", content="content")
         cls.note_3 = NoteFactory(title="New Year 2023", content="content")
         cls.note_4 = NoteFactory(title="my BUCKET LIST", content="content")
-        cls.note_5 = NoteFactory(title="restaurants list", content="content")
 
-    def test_searching_by_exact_word_filters_notes_successfully(self):
+    def test_searching_with_exact_word_works(self):
         q_obj = self.view.get_search_q_object("Diary")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertListEqual(list(notes), [self.note_1])
+        notes = Note.objects.filter(q_obj)
+        assert list(notes) == [self.note_1]
 
-    def test_searching_by_a_substring_filters_notes_successfully(self):
+    def test_searching_with_a_substring_works(self):
         q_obj = self.view.get_search_q_object("shop")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertListEqual(list(notes), [self.note_2])
-
-    def test_searching_by_more_than_1_word_includes_results_with_either(self):
-        q_obj = self.view.get_search_q_object("diary shop")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertListEqual(list(notes), [self.note_1, self.note_2])
-
-    def test_whitespace_is_stripped(self):
-        q_obj = self.view.get_search_q_object("Diary         shop   ")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertListEqual(list(notes), [self.note_1, self.note_2])
+        notes = Note.objects.filter(q_obj)
+        assert list(notes) == [self.note_2]
 
     def test_searching_is_not_case_sensitive(self):
-        q_obj = self.view.get_search_q_object("DIAR")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertListEqual(list(notes), [self.note_1])
+        q_obj = self.view.get_search_q_object("DIARY")
+        notes = Note.objects.filter(q_obj)
+        assert list(notes) == [self.note_1]
 
-    def test_searching_works_with_numbers(self):
+    def test_searching_with_numbers_works(self):
         q_obj = self.view.get_search_q_object("2023")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertListEqual(list(notes), [self.note_3])
+        notes = Note.objects.filter(q_obj)
+        assert list(notes) == [self.note_3]
 
-    def test_searching_works_with_special_characters(self):
+    def test_searching_with_special_characters_works(self):
         q_obj = self.view.get_search_q_object("!!")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertListEqual(list(notes), [self.note_2])
+        notes = Note.objects.filter(q_obj)
+        assert list(notes) == [self.note_2]
+
+    def test_searching_can_match_more_than_one_item(self):
+        q_obj = self.view.get_search_q_object("list")
+        notes = Note.objects.filter(q_obj)
+        self.assertCountEqual(notes, [self.note_2, self.note_4])
+
+    def test_whitespace_is_stripped_from_the_search_query(self):
+        q_obj = self.view.get_search_q_object("diary         shop   ")
+        notes = Note.objects.filter(q_obj)
+        self.assertCountEqual(notes, [self.note_1, self.note_2])
+
+    def test_words_separated_by_spaces_become_separate_search_items(self):
+        q_obj = self.view.get_search_q_object("diary shop")
+        notes = Note.objects.filter(q_obj)
+        self.assertCountEqual(notes, [self.note_1, self.note_2])
 
     def test_searching_with_a_blank_string_returns_all_notes(self):
         q_obj = self.view.get_search_q_object("")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertListEqual(
-            list(notes),
-            [self.note_1, self.note_2, self.note_3, self.note_4, self.note_5],
+        notes = Note.objects.filter(q_obj)
+        self.assertCountEqual(
+            notes, [self.note_1, self.note_2, self.note_3, self.note_4]
         )
 
-    def test_searching_returns_no_matches(self):
+    def test_return_no_results_if_no_titles_match_the_search_query(self):
         q_obj = self.view.get_search_q_object("random")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertFalse(notes.exists())
+        notes = Note.objects.filter(q_obj)
+        assert not notes.exists()
 
     def test_searching_by_pk_does_not_work(self):
         q_obj = self.view.get_search_q_object(f"{self.note_1.pk}")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertFalse(notes.exists())
+        notes = Note.objects.filter(q_obj)
+        assert not notes.exists()
 
     def test_searching_by_content_does_not_work(self):
         q_obj = self.view.get_search_q_object("content")
-        notes = Note.objects.filter(q_obj).order_by("id")
-        self.assertFalse(notes.exists())
+        notes = Note.objects.filter(q_obj)
+        assert not notes.exists()
 
 
 class NoteCreateTest(TestCase):
@@ -167,46 +145,39 @@ class NoteCreateTest(TestCase):
     def setUpTestData(cls):
         cls.user_1, cls.user_2 = UserFactory.create_batch(2)
 
-    def test_get_request_renders_the_note_form_template(self):
+    def setUp(self):
         self.client.force_login(self.user_1)
+
+    def test_get_request_renders_the_note_form_template(self):
         response = self.client.get("/create/")
         self.assertTemplateUsed(response, "notes/note_form.html")
 
-    def test_successfully_creating_a_note_redirects_to_its_detail_page(self):
-        self.client.force_login(self.user_1)
-        response = self.client.post(
-            "/create/", {"title": "note", "content": "content"}
-        )
-        pk = Note.objects.first().pk
-        self.assertRedirects(response, f"/{pk}/")
+    def test_redirect_to_the_note_detail_page_after_creating_a_note(self):
+        response = self.client.post("/create/", {"title": "a", "content": "b"})
+        note = Note.objects.first()
+        self.assertRedirects(response, f"/{note.pk}/")
 
     def test_submitting_invalid_form_data_reloads_the_page(self):
-        self.client.force_login(self.user_1)
-        response = self.client.post(
-            "/create/", {"title": "", "content": "content"}
-        )
+        response = self.client.post("/create/", {"title": "", "content": "b"})
         self.assertTemplateUsed(response, "notes/note_form.html")
 
-    def test_submitting_invalid_form_does_not_create_a_note(self):
-        self.client.force_login(self.user_1)
-        response = self.client.post(
-            "/notes/create/", {"title": "", "content": "content"}
-        )
-        self.assertFalse(Note.objects.exists())
+    def test_submitting_invalid_form_data_does_not_create_a_note(self):
+        self.client.post("/create/", {"title": "", "content": "b"})
+        assert not Note.objects.exists()
 
-    def test_user_forced_to_be_the_request_user_when_creating_a_note(self):
-        self.client.force_login(self.user_1)
-        response = self.client.post(
-            "/create/",
-            {"title": "note", "content": "content", "user": self.user_2.pk},
+    def test_user_cannot_make_notes_for_other_users(self):
+        self.client.post(
+            "/create/", {"title": "a", "content": "b", "user": self.user_2.pk}
         )
-        user = Note.objects.first().user
-        self.assertEqual(user, self.user_1)
+        note = Note.objects.first()
+        assert note.user == self.user_1
 
-    def test_unauthenticated_user_is_redirected_to_the_login_page(self):
-        response = self.client.post(
-            "/create/", {"title": "note", "content": "content"}
-        )
+    def test_unauthenticated_user_get_is_redirected_to_the_login_page(self):
+        response = Client().get("/create/")
+        self.assertRedirects(response, "/login/?next=/create/")
+
+    def test_unauthenticated_user_post_is_redirected_to_the_login_page(self):
+        response = Client().post("/create/", {"title": "a", "content": "b"})
         self.assertRedirects(response, "/login/?next=/create/")
 
 
@@ -217,28 +188,23 @@ class NoteDetailTest(TestCase):
         cls.note_1 = NoteFactory(user=cls.user_1)
         cls.note_2 = NoteFactory(user=cls.user_2)
 
-    def test_get_request_renders_the_note_detail_template(self):
+    def setUp(self):
         self.client.force_login(self.user_1)
+
+    def test_get_request_renders_the_note_detail_template(self):
         response = self.client.get(f"/{self.note_1.pk}/")
         self.assertTemplateUsed(response, "notes/note_detail.html")
 
-    def test_user_can_read_their_own_note(self):
-        self.client.force_login(self.user_1)
-        response = self.client.get(f"/{self.note_1.pk}/")  # status
-        self.assertTemplateUsed(response, "notes/note_detail.html")
+    def test_user_cannot_read_a_note_belonging_to_another_user(self):
+        response = self.client.get(f"/{self.note_2.pk}/")
+        assert response.status_code == 403
 
-    def test_user_cannot_see_a_note_created_by_another_user(self):
-        self.client.force_login(self.user_1)
-        response = self.client.get(f"/{self.note_2.pk}/")  # 403
-        self.assertEqual(response.status_code, 403)
-
-    def test_user_cannot_read_a_note_that_does_not_exist(self):  # 404
-        self.client.force_login(self.user_1)
+    def test_user_cannot_read_a_note_that_does_not_exist(self):
         response = self.client.get("/1000000/")
-        self.assertEqual(response.status_code, 404)
+        assert response.status_code == 404
 
     def test_unauthenticated_user_is_redirected_to_the_login_page(self):
-        response = self.client.get(f"/{self.note_1.pk}/")
+        response = Client().get(f"/{self.note_1.pk}/")
         self.assertRedirects(response, f"/login/?next=/{self.note_1.pk}/")
 
 
@@ -249,72 +215,70 @@ class NoteUpdateTest(TestCase):
         cls.note_1 = NoteFactory(user=cls.user_1)
         cls.note_2 = NoteFactory(user=cls.user_2)
 
-    def test_get_request_renders_the_note_form_template(self):
+    def setUp(self):
         self.client.force_login(self.user_1)
+
+    def test_get_request_renders_the_note_form_template(self):
         response = self.client.get(f"/{self.note_1.pk}/update/")
         self.assertTemplateUsed(response, "notes/note_form.html")
 
-    def test_redirect_to_the_note_detail_page_after_update(self):
-        self.client.force_login(self.user_1)
-        response = self.client.post(
-            f"/{self.note_1.pk}/update/",
-            {"title": "note", "content": "content"},
-        )
-        self.assertRedirects(response, f"/{self.note_1.pk}/")
-
     def test_user_can_update_their_own_note(self):
-        self.client.force_login(self.user_1)
+        self.client.post(
+            f"/{self.note_1.pk}/update/", {"title": "a", "content": "b"}
+        )
+        note = Note.objects.get(user=self.user_1)
+        assert note.title == "a" and note.content == "b"
+
+    def test_redirect_to_the_note_detail_page_after_updating_a_note(self):
         response = self.client.post(
-            f"/{self.note_1.pk}/update/",
-            {"title": "note", "content": "content"},
+            f"/{self.note_1.pk}/update/", {"title": "a", "content": "b"}
         )
         self.assertRedirects(response, f"/{self.note_1.pk}/")
 
-    def test_user_cannot_update_a_note_created_by_another_user(self):  # 403
-        self.client.force_login(self.user_1)
+    def test_user_cannot_update_a_note_belonging_to_another_user(self):  # 403
         response = self.client.post(
             f"/{self.note_2.pk}/update/",
-            {"title": "note", "content": "content"},
+            {"title": "a", "content": "b"},
         )
-        self.assertEqual(response.status_code, 403)
+        assert response.status_code == 403
 
     def test_user_cannot_update_a_note_that_does_not_exist(self):
-        self.client.force_login(self.user_1)
         response = self.client.post(
             "/1000000/update/",
-            {"title": "note", "content": "content"},
+            {"title": "a", "content": "b"},
         )
-        self.assertEqual(response.status_code, 404)
+        assert response.status_code == 404
 
-    def test_user_cannot_update_a_note_with_invalid_pk(self):
-        self.client.force_login(self.user_1)
+    def test_user_cannot_update_a_note_with_an_invalid_pk(self):
         response = self.client.post(
             "/one/update/",
-            {"title": "note", "content": "content"},
+            {"title": "a", "content": "b"},
         )
-        self.assertEqual(response.status_code, 404)
+        assert response.status_code == 404
 
     def test_submitting_invalid_form_data_reloads_the_page(self):
-        self.client.force_login(self.user_1)
         response = self.client.post(
-            f"/{self.note_1.pk}/update/",
-            {"title": "", "content": "content"},
+            f"/{self.note_1.pk}/update/", {"title": "", "content": "b"}
         )
         self.assertTemplateUsed(response, "notes/note_form.html")
 
-    def test_submitting_invalid_form_does_not_create_a_note(self):
-        self.client.force_login(self.user_1)
-        response = self.client.post(
+    def test_submitting_invalid_form_does_not_update_a_note(self):
+        self.client.post(
             f"/{self.note_1.pk}/update/",
-            {"title": "", "content": "content"},
+            {"title": "", "content": "b"},
         )
         note = Note.objects.get(user=self.user_1)
-        self.assertFalse(note.title == "")
+        assert not note.title == "" and not note.content == "b"
 
-    def test_unauthenticated_user_is_redirected_to_the_login_page(self):
-        response = self.client.post(
-            f"/{self.note_1.pk}/update/",
-            {"title": "note", "content": "content"},
+    def test_unauthenticated_user_get_is_redirected_to_the_login_page(self):
+        response = Client().get(f"/{self.note_1.pk}/update/")
+        self.assertRedirects(
+            response, f"/login/?next=/{self.note_1.pk}/update/"
+        )
+
+    def test_unauthenticated_user_post_is_redirected_to_the_login_page(self):
+        response = Client().post(
+            f"/{self.note_1.pk}/update/", {"title": "a", "content": "b"}
         )
         self.assertRedirects(
             response, f"/login/?next=/{self.note_1.pk}/update/"
@@ -328,38 +292,41 @@ class NoteDeleteTest(TestCase):
         cls.note_1 = NoteFactory(user=cls.user_1)
         cls.note_2 = NoteFactory(user=cls.user_2)
 
-    def test_get_request_renders_the_note_confirm_delete_template(self):
+    def setUp(self):
         self.client.force_login(self.user_1)
+
+    def test_get_request_renders_the_note_confirm_delete_template(self):
         response = self.client.get(f"/{self.note_1.pk}/delete/")
         self.assertTemplateUsed(response, "notes/note_confirm_delete.html")
 
     def test_user_can_delete_their_own_note(self):
-        self.client.force_login(self.user_1)
+        self.client.post(f"/{self.note_1.pk}/delete/")
+        assert not Note.objects.filter(user=self.user_1).exists()
+
+    def test_redirect_to_notes_list_after_deleting_a_note(self):
         response = self.client.post(f"/{self.note_1.pk}/delete/")
         self.assertRedirects(response, "/")
 
-    def test_redirect_to_notes_list_after_deletion(self):
-        self.client.force_login(self.user_1)
-        response = self.client.post(f"/{self.note_1.pk}/delete/")
-        self.assertRedirects(response, "/")
-
-    def test_user_cannot_delete_a_note_created_by_another_user(self):
-        self.client.force_login(self.user_1)
+    def test_user_cannot_delete_a_note_belonging_to_another_user(self):
         response = self.client.post(f"/{self.note_2.pk}/delete/")
-        self.assertEqual(response.status_code, 403)
+        assert response.status_code == 403
 
     def test_user_cannot_delete_a_note_that_does_not_exist(self):
-        self.client.force_login(self.user_1)
         response = self.client.post("/1000000/delete/")
-        self.assertEqual(response.status_code, 404)
+        assert response.status_code == 404
 
-    def test_user_cannot_delete_a_note_that_with_invalid_pk(self):
-        self.client.force_login(self.user_1)
+    def test_user_cannot_delete_a_note_that_with_an_invalid_pk(self):
         response = self.client.post("/one/delete/")
-        self.assertEqual(response.status_code, 404)
+        assert response.status_code == 404
 
-    def test_unauthenticated_user_is_redirected_to_the_login_page(self):
-        response = self.client.post(f"/{self.note_1.pk}/delete/")
+    def test_unauthenticated_user_get_is_redirected_to_the_login_page(self):
+        response = Client().get(f"/{self.note_1.pk}/delete/")
+        self.assertRedirects(
+            response, f"/login/?next=/{self.note_1.pk}/delete/"
+        )
+
+    def test_unauthenticated_user_post_is_redirected_to_the_login_page(self):
+        response = Client().post(f"/{self.note_1.pk}/delete/")
         self.assertRedirects(
             response, f"/login/?next=/{self.note_1.pk}/delete/"
         )
