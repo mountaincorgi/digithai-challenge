@@ -1,0 +1,10 @@
+#logo {
+    color: #212529;
+    -webkit-transition: text-decoration-color 1s;
+    -moz-transition: text-decoration-color 1s;
+    -o-transition: text-decoration-color 1s;
+    transition: text-decoration-color 1s;
+}
+#logo:hover {
+    text-decoration-color: rgb(7, 203, 207);
+}
