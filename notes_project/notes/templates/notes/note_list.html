@@ -21,11 +21,11 @@
     <br>
 
     {% for note in notes %}
-    <div class="row mt-2">
-        <h5><a href="{% url 'note-detail' note.pk %}">{{ note.title }}</a></h5>
-        <p>{{ note.preview_content }}</p>
-        <p class="text-secondary"><i><span>Created on {{ note.created }}</span> | <span>Modified on {{ note.modified }}</span></i></p>
-    </div>
+        <div class="row mt-2">
+            <h5><a href="{% url 'note-detail' note.pk %}">{{ note.title }}</a></h5>
+            <p>{{ note.preview_content }}</p>
+            <p class="text-secondary"><i><span>Created on {{ note.created }}</span> | <span>Modified on {{ note.modified }}</span></i></p>
+        </div>
     {% endfor %}
 </div>
 {% endblock %}
