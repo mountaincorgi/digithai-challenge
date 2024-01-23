@@ -39,7 +39,7 @@ Two test users have been set up
 
 ## Notes
 
-* Alternatively can run on a VSCode devcontainer. I've included my own VSCode devcontainer and launch configurations.
+* Alternatively can run on a VSCode devcontainer. I've included my own VSCode devcontainer and launch configurations. After starting the devcontainer the window may need to be reloaded for the VSCode extensions to install correctly.
 * Pre-commit is set up to run linting and formatting hooks inside the devcontainer.
 * I've used factory_boy for tests because it's what I'm most familiar with at the moment.
 
