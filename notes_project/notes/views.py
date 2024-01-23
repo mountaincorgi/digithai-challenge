@@ -15,6 +15,8 @@ from notes.models import Note
 
 
 class BelongsToUserMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Users must be authenticated and own the requested view object."""
+
     def test_func(self):
         obj = self.get_object()
         if obj and obj.user:
@@ -43,7 +45,8 @@ class NoteListView(LoginRequiredMixin, ListView):
         """Build a Q object to filter Notes by their titles.
 
         Each group of characters separated by spaces is treated as a separate
-        search item.
+        search item. i.e. if there are 2 notes, 'Note One' and 'Note Two,
+        searching by 'one two' will return both notes.
         """
 
         q_obj = Q()
