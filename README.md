@@ -4,7 +4,7 @@ Hello! this is my code challenge submission.
 
 ## Build
 ```bash
-docker built -t digithai-challenge-jz .
+docker build -t digithai-challenge-jz .
 ```
 
 ## Run
