@@ -2,19 +2,27 @@
 
 Hello! this is my code challenge submission.
 
-## Build
+## Run using Docker
+
 ```bash
+# Build
 docker build -t digithai-challenge-jz .
-```
 
-## Run
-```bash
+# Run
 docker run -d -p 8000:8000 --name digithai_challenge_jz --rm digithai-challenge-jz
+
+# Stop
+docker stop digithai_challenge_jz
 ```
 
-## Stop
+## Run using venv
+
 ```bash
-docker stop digithai_challenge_jz
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cd notes_project
+python manage.py runserver
 ```
 
 ## Test
